@@ -7,6 +7,8 @@ st.set_page_config(
     layout="wide"
 )
 
+# Force refresh for Streamlit Cloud
+
 # Import required libraries with error handling
 try:
     import tensorflow as tf
