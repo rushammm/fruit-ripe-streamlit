@@ -1,40 +1,36 @@
 import streamlit as st
 
+# Set page config - MUST be the first Streamlit command
+st.set_page_config(
+    page_title="Fruit Classification App",
+    page_icon="🍎",
+    layout="wide"
+)
+
 # Import required libraries with error handling
 try:
     import tensorflow as tf
     HAS_TENSORFLOW = True
 except ImportError:
-    st.error("TensorFlow is not installed. Please install it with: pip install tensorflow")
     HAS_TENSORFLOW = False
 
 try:
     from PIL import Image
     HAS_PIL = True
 except ImportError:
-    st.error("PIL (Pillow) is not installed. Please install it with: pip install Pillow")
     HAS_PIL = False
 
 try:
     import numpy as np
     HAS_NUMPY = True
 except ImportError:
-    st.error("NumPy is not installed. Please install it with: pip install numpy")
     HAS_NUMPY = False
 
 try:
     import cv2
     HAS_CV2 = True
 except ImportError:
-    st.warning("OpenCV is not installed. Using PIL for image processing. Install with: pip install opencv-python")
     HAS_CV2 = False
-
-# Set page config
-st.set_page_config(
-    page_title="Fruit Classification App",
-    page_icon="🍎",
-    layout="wide"
-)
 
 @st.cache_resource
 def load_model():
@@ -104,6 +100,19 @@ def main():
     st.write("Upload an image of a fruit to classify it using our deep learning model!")
     
     # Check if all required dependencies are available
+    missing_deps = []
+    if not HAS_TENSORFLOW:
+        missing_deps.append("tensorflow")
+        st.error("TensorFlow is not installed. Please install it with: pip install tensorflow")
+    if not HAS_PIL:
+        missing_deps.append("Pillow")
+        st.error("PIL (Pillow) is not installed. Please install it with: pip install Pillow")
+    if not HAS_NUMPY:
+        missing_deps.append("numpy")
+        st.error("NumPy is not installed. Please install it with: pip install numpy")
+    if not HAS_CV2:
+        st.warning("OpenCV is not installed. Using PIL for image processing. Install with: pip install opencv-python")
+    
     if not all([HAS_TENSORFLOW, HAS_PIL, HAS_NUMPY]):
         st.error("Missing required dependencies. Please install the required packages:")
         st.code("pip install streamlit tensorflow Pillow numpy opencv-python")
