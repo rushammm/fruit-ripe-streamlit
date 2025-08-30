@@ -1,173 +1,141 @@
 import streamlit as st
-import tensorflow as tf
+import torch
+import torch.nn as nn
+import torchvision.transforms as transforms
+import torchvision.models as models
 import numpy as np
 from PIL import Image
-import io
+import json
 
-st.set_page_config(
-    page_title="Fruit Ripeness Classifier",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Fruit Ripeness Classifier", layout="wide")
 
-# define class labels 
-CLASS_LABELS = ["Ripe", "Unripe", "Overripe"]
+
+@st.cache_data
+def load_class_names():
+    with open("class_names.json", "r") as f:
+        return json.load(f)
+
 
 @st.cache_resource
-def load_model(model_path):
-    try:
-        model = tf.keras.models.load_model(model_path)
-        return model
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
+def load_model():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def preprocess_image(image, target_size=(128, 128)):
-   
-    try:
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        # resize image to model input size
-        image = image.resize(target_size)
-        
-        # convert to numpy array
-        image_array = np.array(image)
-        
-        # normalize pixel values to [0, 1]
-        image_array = image_array.astype(np.float32) / 255.0
-        
-        # add batch dimension
-        image_array = np.expand_dims(image_array, axis=0)
-        
-        return image_array
-    except Exception as e:
-        st.error(f"Error preprocessing image: {e}")
-        return None
+    class_names = load_class_names()
+    num_classes = len(class_names)
 
-def predict_ripeness(model, image_array):
-    try:
-        # make prediction
-        predictions = model.predict(image_array, verbose=0)
-        
-        # class probabilities
-        probabilities = tf.nn.softmax(predictions[0]).numpy()
-        
-        # predicted class
-        predicted_class_idx = np.argmax(probabilities)
-        predicted_class = CLASS_LABELS[predicted_class_idx]
-        confidence = probabilities[predicted_class_idx]
-        
-        return predicted_class, confidence, probabilities
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
-        return None, None, None
+    model = models.resnet50(pretrained=False)
+    model.fc = nn.Sequential(
+        nn.Dropout(0.3), nn.Linear(model.fc.in_features, num_classes)
+    )
+
+    model.load_state_dict(
+        torch.load("best_resnet_model_cleaned.pth", map_location=device)
+    )
+    model = model.to(device)
+    model.eval()
+
+    return model, device
+
+
+def preprocess_image(image, device):
+    transform = transforms.Compose(
+        [
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    )
+
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    image_tensor = transform(image).unsqueeze(0).to(device)
+    return image_tensor
+
+
+def predict(model, image_tensor, class_names, device):
+    with torch.no_grad():
+        outputs = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)
+        predicted_idx = torch.argmax(probabilities, dim=1).item()
+        confidence = probabilities[0][predicted_idx].item()
+
+        probs_np = probabilities[0].cpu().numpy()
+
+    st.write(f"**Debug Info:**")
+    st.write(f"Device: {device}")
+    st.write(f"Input shape: {image_tensor.shape}")
+    st.write(
+        f"Raw outputs range: [{outputs.min().item():.3f}, {outputs.max().item():.3f}]"
+    )
+    st.write(f"Top 3 predictions:")
+    top_3_idx = torch.topk(probabilities[0], 3).indices.cpu().numpy()
+    for idx in top_3_idx:
+        st.write(f"  {class_names[idx]}: {probs_np[idx]:.3f}")
+    st.write("---")
+
+    return class_names[predicted_idx], confidence, probs_np
+
 
 def main():
     st.title("Fruit Ripeness Classifier")
-    st.markdown("""
-    Upload an image of a fruit and get an AI-powered analysis of its ripeness!
-    
-    - Architecture: ResNet50 
-    - Input Size: 128x128 pixels
-    - Classes: Ripe, Unripe, Overripe
-    """)
-    
-    st.sidebar.header("Model Selection")
-    model_choice = st.sidebar.selectbox(
-        "Choose model format:",
-        ["best_fruit_model.keras", "best_fruit_model.h5"]
-        
-    )
-    
-    with st.spinner(f"Loading {model_choice}..."):
-        model = load_model(model_choice)
-    
-    if model is None:
-        st.error("Failed to load model. Please check if the model files exist.")
-        return
-    
-    st.success(f"Model loaded successfully: {model_choice}")
-    
-    # file uploader
-    uploaded_file = st.file_uploader(
-        "Choose a fruit image...",
-        type=['png', 'jpg', 'jpeg'],
-        help="Upload an image in PNG, JPG, or JPEG format"
-    )
-    
+    st.write("Upload an image to classify fruit ripeness (PyTorch ResNet50)")
+
+    class_names = load_class_names()
+
+    with st.spinner("Loading PyTorch model..."):
+        try:
+            model, device = load_model()
+            st.success(f"PyTorch ResNet50 model loaded successfully on {device}")
+        except Exception as e:
+            st.error(f"Error loading model: {e}")
+            st.info(
+                "Make sure 'best_resnet_model_cleaned.pth' exists in the current directory"
+            )
+            return
+
+    uploaded_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
+
     if uploaded_file is not None:
-        # two columns for layout
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            st.subheader("Uploaded Image")
-            
-            # load and display the image
             image = Image.open(uploaded_file)
-            st.image(image, caption="Original Image", use_container_width=True)
-            
-            # image details
-            st.info(f"""
-            **Image Details:**
-            - Size: {image.size[0]} x {image.size[1]} pixels
-            - Mode: {image.mode}
-            - Format: {image.format}
-            """)
-        
+            st.image(image, caption="Uploaded Image", width="stretch")
+            st.write(f"**Image Info:**")
+            st.write(f"Size: {image.size[0]} x {image.size[1]} pixels")
+            st.write(f"Mode: {image.mode}")
+
         with col2:
-            st.subheader("AI Analysis")
-            
-            # preprocess the image
-            with st.spinner("Preprocessing image..."):
-                processed_image = preprocess_image(image)
-            
-            if processed_image is not None:
-                # make prediction
-                with st.spinner("Analyzing ripeness..."):
-                    predicted_class, confidence, probabilities = predict_ripeness(model, processed_image)
-                
-                if predicted_class is not None:
-                    # display main prediction
-                    st.success(f"**Prediction: {predicted_class}**")
-                    st.info(f"**Confidence: {confidence:.2%}**")
-                    
-                    # confidence meter
-                    st.metric("Confidence Score", f"{confidence:.2%}")
-                    
-                    # class probabilities
-                    st.subheader("Class Probabilities")
-                    
-                    for i, (label, prob) in enumerate(zip(CLASS_LABELS, probabilities)):
-                        # Color code based on prediction
+            with st.spinner("Processing image..."):
+                try:
+                    image_tensor = preprocess_image(image, device)
+
+                    predicted_class, confidence, probabilities = predict(
+                        model, image_tensor, class_names, device
+                    )
+
+                    st.write(f"**Prediction:** {predicted_class}")
+                    st.write(f"**Confidence:** {confidence:.2%}")
+
+                    st.write("**All Class Probabilities:**")
+                    for i, (label, prob) in enumerate(zip(class_names, probabilities)):
                         if i == np.argmax(probabilities):
-                            st.success(f"**{label}: {prob:.2%}**")
+                            st.write(f"**{label}: {prob:.2%}**")
                         else:
                             st.write(f"{label}: {prob:.2%}")
-                        
-                        # progress bar for each class
-                        st.progress(float(prob))
-                    
-                    # interpretation
-                    st.subheader("Interpretation")
-                    if predicted_class == "Ripe":
-                        st.success("This fruit appears to be **ripe** and ready to eat!")
-                    elif predicted_class == "Unripe":
-                        st.warning("This fruit appears to be **unripe**. You might want to wait a bit longer.")
-                    elif predicted_class == "Overripe":
-                        st.error("This fruit appears to be **overripe**. It might be past its prime.")
-                    
-                    # confidence interpretation
+
+                    st.write("**Interpretation:**")
                     if confidence > 0.8:
-                        st.info("High confidence prediction!")
+                        st.success(f"High confidence prediction: {predicted_class}")
                     elif confidence > 0.6:
-                        st.info("Moderate confidence prediction.")
+                        st.info(f"Moderate confidence prediction: {predicted_class}")
                     else:
-                        st.warning("Low confidence prediction. The image might be unclear or the fruit might be borderline between categories.")
+                        st.warning(f"Low confidence prediction: {predicted_class}")
 
- 
+                except Exception as e:
+                    st.error(f"Error during prediction: {e}")
 
-    
+
 if __name__ == "__main__":
     main()
