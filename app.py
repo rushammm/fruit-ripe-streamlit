@@ -1,203 +1,207 @@
 import streamlit as st
+import tensorflow as tf
+import numpy as np
+from PIL import Image
+import io
 
-# Set page config - MUST be the first Streamlit command
+# Configure Streamlit page
 st.set_page_config(
-    page_title="Fruit Classification App",
-    page_icon="",
-    layout="wide"
+    page_title="Fruit Ripeness Classifier",
+    page_icon="🍎",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Force refresh for Streamlit Cloud
-
-# Import required libraries with error handling
-try:
-    import tensorflow as tf
-    HAS_TENSORFLOW = True
-except ImportError:
-    HAS_TENSORFLOW = False
-
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
-
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-
-try:
-    import cv2
-    HAS_CV2 = True
-except ImportError:
-    HAS_CV2 = False
+# Define class labels (based on model output with 3 classes)
+CLASS_LABELS = ["Ripe", "Unripe", "Overripe"]
 
 @st.cache_resource
-def load_model():
-    """Load the trained fruit classification model"""
+def load_model(model_path):
+    """Load and cache the TensorFlow model"""
     try:
-        # Try loading the .keras file first, then fall back to .h5
-        model = tf.keras.models.load_model('best_fruit_model.keras')
+        model = tf.keras.models.load_model(model_path)
         return model
-    except:
-        try:
-            model = tf.keras.models.load_model('best_fruit_model.h5')
-            return model
-        except Exception as e:
-            st.error(f"Error loading model: {e}")
-            return None
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
 def preprocess_image(image, target_size=(128, 128)):
-    """Preprocess the uploaded image for model prediction"""
-    if not HAS_NUMPY:
-        st.error("NumPy is required for image preprocessing")
-        return None
-    
-    # Convert PIL image to numpy array
-    img_array = np.array(image)
-    
-    # Resize image
-    if HAS_CV2:
-        img_resized = cv2.resize(img_array, target_size)
-    else:
-        # Use PIL for resizing if OpenCV is not available
-        img_pil = image.resize(target_size)
-        img_resized = np.array(img_pil)
-    
-    # Normalize pixel values to [0, 1]
-    img_normalized = img_resized.astype('float32') / 255.0
-    
-    # Add batch dimension
-    img_batch = np.expand_dims(img_normalized, axis=0)
-    
-    return img_batch
-
-def predict_fruit(model, image):
-    """Make prediction on the preprocessed image"""
+    """Preprocess image for model prediction"""
     try:
-        # Preprocess the image
-        processed_image = preprocess_image(image)
+        # Convert to RGB if needed
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
         
-        # Make prediction
-        predictions = model.predict(processed_image)
+        # Resize image to model input size
+        image = image.resize(target_size)
         
-        # Get the predicted class index
-        predicted_class_idx = np.argmax(predictions[0])
-        confidence = float(predictions[0][predicted_class_idx])
+        # Convert to numpy array
+        image_array = np.array(image)
         
-        return predicted_class_idx, confidence, predictions[0]
+        # Normalize pixel values to [0, 1]
+        image_array = image_array.astype(np.float32) / 255.0
+        
+        # Add batch dimension
+        image_array = np.expand_dims(image_array, axis=0)
+        
+        return image_array
     except Exception as e:
-        st.error(f"Error during prediction: {e}")
+        st.error(f"Error preprocessing image: {e}")
+        return None
+
+def predict_ripeness(model, image_array):
+    """Make prediction using the loaded model"""
+    try:
+        # Make prediction
+        predictions = model.predict(image_array, verbose=0)
+        
+        # Get class probabilities
+        probabilities = tf.nn.softmax(predictions[0]).numpy()
+        
+        # Get predicted class
+        predicted_class_idx = np.argmax(probabilities)
+        predicted_class = CLASS_LABELS[predicted_class_idx]
+        confidence = probabilities[predicted_class_idx]
+        
+        return predicted_class, confidence, probabilities
+    except Exception as e:
+        st.error(f"Error making prediction: {e}")
         return None, None, None
 
-# Define fruit classes (you may need to adjust these based on your model)
-FRUIT_CLASSES = [
-    'Overripe', 'Ripe', 'Unripe'
-]
-
 def main():
-    st.title("Ripeness Detection of Fruits")
-    st.write("Upload an image of a fruit to classify it using our deep learning model!")
+    st.title("🍎 Fruit Ripeness Classifier")
+    st.markdown("""
+    Upload an image of a fruit and get an AI-powered analysis of its ripeness!
     
-    # Check if all required dependencies are available
-    missing_deps = []
-    if not HAS_TENSORFLOW:
-        missing_deps.append("tensorflow")
-        st.error("TensorFlow is not installed. Please install it with: pip install tensorflow")
-    if not HAS_PIL:
-        missing_deps.append("Pillow")
-        st.error("PIL (Pillow) is not installed. Please install it with: pip install Pillow")
-    if not HAS_NUMPY:
-        missing_deps.append("numpy")
-        st.error("NumPy is not installed. Please install it with: pip install numpy")
-    if not HAS_CV2:
-        st.warning("OpenCV is not installed. Using PIL for image processing. Install with: pip install opencv-python")
+    **Model Information:**
+    - Architecture: MobileNetV2 (optimized for mobile/edge devices)
+    - Input Size: 128x128 pixels
+    - Classes: Ripe, Unripe, Overripe
+    """)
     
-    if not all([HAS_TENSORFLOW, HAS_PIL, HAS_NUMPY]):
-        st.error("Missing required dependencies. Please install the required packages:")
-        st.code("pip install streamlit tensorflow Pillow numpy opencv-python")
-        st.stop()
+    # Sidebar for model selection
+    st.sidebar.header("Model Selection")
+    model_choice = st.sidebar.selectbox(
+        "Choose model format:",
+        ["best_fruit_model.keras", "best_fruit_model.h5"],
+        help="Both models are identical, choose your preferred format"
+    )
     
-    # Load the model
-    model = load_model()
+    # Load the selected model
+    with st.spinner(f"Loading {model_choice}..."):
+        model = load_model(model_choice)
     
     if model is None:
-        st.error("Failed to load the model. Please check if the model files exist.")
+        st.error("Failed to load model. Please check if the model files exist.")
         return
     
-    # Create two columns
-    col1, col2 = st.columns([1, 1])
+    st.success(f"✅ Model loaded successfully: {model_choice}")
     
-    with col1:
-        st.header("Upload Image")
-        uploaded_file = st.file_uploader(
-            "Choose an image file",
-            type=['jpg', 'jpeg', 'png', 'bmp', 'tiff'],
-            help="Upload an image of a fruit to classify"
-        )
+    # File uploader
+    uploaded_file = st.file_uploader(
+        "Choose a fruit image...",
+        type=['png', 'jpg', 'jpeg'],
+        help="Upload an image in PNG, JPG, or JPEG format"
+    )
+    
+    if uploaded_file is not None:
+        # Create two columns for layout
+        col1, col2 = st.columns(2)
         
-        if uploaded_file is not None:
-            # Display the uploaded image
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Uploaded Image", use_column_width=True)
+        with col1:
+            st.subheader("📷 Uploaded Image")
             
-            # Add a predict button
-            if st.button(" Classify Fruit", type="primary"):
-                with st.spinner("Classifying..."):
-                    # Make prediction
-                    predicted_idx, confidence, all_predictions = predict_fruit(model, image)
+            # Load and display the image
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Original Image", use_container_width=True)
+            
+            # Show image details
+            st.info(f"""
+            **Image Details:**
+            - Size: {image.size[0]} x {image.size[1]} pixels
+            - Mode: {image.mode}
+            - Format: {image.format}
+            """)
+        
+        with col2:
+            st.subheader("🤖 AI Analysis")
+            
+            # Preprocess the image
+            with st.spinner("Preprocessing image..."):
+                processed_image = preprocess_image(image)
+            
+            if processed_image is not None:
+                # Make prediction
+                with st.spinner("Analyzing ripeness..."):
+                    predicted_class, confidence, probabilities = predict_ripeness(model, processed_image)
+                
+                if predicted_class is not None:
+                    # Display main prediction
+                    st.success(f"**Prediction: {predicted_class}**")
+                    st.info(f"**Confidence: {confidence:.2%}**")
                     
-                    if predicted_idx is not None:
-                        with col2:
-                            st.header("Prediction Results")
-                            
-                            # Display main prediction
-                            if predicted_idx < len(FRUIT_CLASSES):
-                                predicted_fruit = FRUIT_CLASSES[predicted_idx]
-                            else:
-                                predicted_fruit = f"Class {predicted_idx}"
-                            
-                            st.success(f"**Predicted Fruit:** {predicted_fruit}")
-                            st.info(f"**Confidence:** {confidence:.2%}")
-                            
-                            # Create a progress bar for confidence
-                            st.progress(confidence)
-                            
-                            # Display top 3 predictions
-                            st.subheader("Top 3 Predictions:")
-                            top_indices = np.argsort(all_predictions)[::-1][:3]
-                            
-                            for i, idx in enumerate(top_indices):
-                                if idx < len(FRUIT_CLASSES):
-                                    fruit_name = FRUIT_CLASSES[idx]
-                                else:
-                                    fruit_name = f"Class {idx}"
-                                
-                                confidence_score = all_predictions[idx]
-                                st.write(f"{i+1}. **{fruit_name}**: {confidence_score:.2%}")
-    
-    # Add information about the model
-    with st.expander(" About the Model"):
-        st.write("""
-        This fruit classification model is a deep learning neural network trained to classify whether a fruit is ripe for not.
+                    # Display confidence meter
+                    st.metric("Confidence Score", f"{confidence:.2%}")
+                    
+                    # Display all class probabilities
+                    st.subheader("📊 Class Probabilities")
+                    
+                    for i, (label, prob) in enumerate(zip(CLASS_LABELS, probabilities)):
+                        # Color code based on prediction
+                        if i == np.argmax(probabilities):
+                            st.success(f"**{label}: {prob:.2%}**")
+                        else:
+                            st.write(f"{label}: {prob:.2%}")
+                        
+                        # Progress bar for each class
+                        st.progress(float(prob))
+                    
+                    # Interpretation
+                    st.subheader("💡 Interpretation")
+                    if predicted_class == "Ripe":
+                        st.success("🍎 This fruit appears to be **ripe** and ready to eat!")
+                    elif predicted_class == "Unripe":
+                        st.warning("🟢 This fruit appears to be **unripe**. You might want to wait a bit longer.")
+                    elif predicted_class == "Overripe":
+                        st.error("🍂 This fruit appears to be **overripe**. It might be past its prime.")
+                    
+                    # Confidence interpretation
+                    if confidence > 0.8:
+                        st.info("🎯 High confidence prediction!")
+                    elif confidence > 0.6:
+                        st.info("⚖️ Moderate confidence prediction.")
+                    else:
+                        st.warning("🤔 Low confidence prediction. The image might be unclear or the fruit might be borderline between categories.")
+
+    # Instructions
+    with st.expander("🔍 How to use this app"):
+        st.markdown("""
+        1. **Select a model** from the sidebar (both models are identical)
+        2. **Upload an image** of a fruit using the file uploader
+        3. **Wait for the analysis** - the AI will process your image
+        4. **Review the results** including the predicted class and confidence scores
         
-        **How to use:**
-        1. Upload an image of a fruit using the file uploader
-        2. Click the "Classify Fruit" button
-        3. View the prediction results and confidence scores
-        
-        **Supported image formats:** JPG, JPEG, PNG, BMP, TIFF
-        
-        **Tips for better results:**
+        **Tips for best results:**
         - Use clear, well-lit images
-        - Ensure the fruit is the main subject in the image
-        - Avoid heavily processed or filtered images
+        - Ensure the fruit is the main subject
+        - Try different angles if results seem unclear
         """)
-    
-    # Add footer
-    st.markdown("---")
+
+    # Model information
+    with st.expander("🧠 About the AI Model"):
+        st.markdown("""
+        **Architecture:** MobileNetV2 - A lightweight convolutional neural network optimized for mobile and edge devices.
+        
+        **Training:** The model was trained to classify fruits into three ripeness categories:
+        - **Ripe:** Ready to eat
+        - **Unripe:** Needs more time to ripen
+        - **Overripe:** Past peak ripeness
+        
+        **Technical Details:**
+        - Input: 128x128 RGB images
+        - Output: 3 class probabilities
+        - Framework: TensorFlow 2.x
+        """)
 
 if __name__ == "__main__":
     main()
