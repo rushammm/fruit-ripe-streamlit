@@ -7,7 +7,7 @@ import io
 # Configure Streamlit page
 st.set_page_config(
     page_title="Fruit Ripeness Classifier",
-    page_icon="🍎",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -69,7 +69,7 @@ def predict_ripeness(model, image_array):
         return None, None, None
 
 def main():
-    st.title("🍎 Fruit Ripeness Classifier")
+    st.title("Fruit Ripeness Classifier")
     st.markdown("""
     Upload an image of a fruit and get an AI-powered analysis of its ripeness!
     
@@ -109,7 +109,7 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("📷 Uploaded Image")
+            st.subheader("Uploaded Image")
             
             # Load and display the image
             image = Image.open(uploaded_file)
@@ -124,7 +124,7 @@ def main():
             """)
         
         with col2:
-            st.subheader("🤖 AI Analysis")
+            st.subheader("AI Analysis")
             
             # Preprocess the image
             with st.spinner("Preprocessing image..."):
@@ -144,7 +144,7 @@ def main():
                     st.metric("Confidence Score", f"{confidence:.2%}")
                     
                     # Display all class probabilities
-                    st.subheader("📊 Class Probabilities")
+                    st.subheader("Class Probabilities")
                     
                     for i, (label, prob) in enumerate(zip(CLASS_LABELS, probabilities)):
                         # Color code based on prediction
@@ -157,24 +157,24 @@ def main():
                         st.progress(float(prob))
                     
                     # Interpretation
-                    st.subheader("💡 Interpretation")
+                    st.subheader("Interpretation")
                     if predicted_class == "Ripe":
-                        st.success("🍎 This fruit appears to be **ripe** and ready to eat!")
+                        st.success("This fruit appears to be **ripe** and ready to eat!")
                     elif predicted_class == "Unripe":
-                        st.warning("🟢 This fruit appears to be **unripe**. You might want to wait a bit longer.")
+                        st.warning("This fruit appears to be **unripe**. You might want to wait a bit longer.")
                     elif predicted_class == "Overripe":
-                        st.error("🍂 This fruit appears to be **overripe**. It might be past its prime.")
+                        st.error("This fruit appears to be **overripe**. It might be past its prime.")
                     
                     # Confidence interpretation
                     if confidence > 0.8:
-                        st.info("🎯 High confidence prediction!")
+                        st.info("High confidence prediction!")
                     elif confidence > 0.6:
-                        st.info("⚖️ Moderate confidence prediction.")
+                        st.info("Moderate confidence prediction.")
                     else:
-                        st.warning("🤔 Low confidence prediction. The image might be unclear or the fruit might be borderline between categories.")
+                        st.warning("Low confidence prediction. The image might be unclear or the fruit might be borderline between categories.")
 
     # Instructions
-    with st.expander("🔍 How to use this app"):
+    with st.expander("How to use this app"):
         st.markdown("""
         1. **Select a model** from the sidebar (both models are identical)
         2. **Upload an image** of a fruit using the file uploader
@@ -188,7 +188,7 @@ def main():
         """)
 
     # Model information
-    with st.expander("🧠 About the AI Model"):
+    with st.expander("About the AI Model"):
         st.markdown("""
         **Architecture:** MobileNetV2 - A lightweight convolutional neural network optimized for mobile and edge devices.
         
