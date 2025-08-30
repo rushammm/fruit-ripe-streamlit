@@ -69,7 +69,7 @@ def main():
     st.markdown("""
     Upload an image of a fruit and get an AI-powered analysis of its ripeness!
     
-    - Architecture: MobileNetV2 
+    - Architecture: ResNet50 
     - Input Size: 128x128 pixels
     - Classes: Ripe, Unripe, Overripe
     """)
