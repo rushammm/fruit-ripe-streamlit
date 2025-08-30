@@ -173,35 +173,8 @@ def main():
                     else:
                         st.warning("Low confidence prediction. The image might be unclear or the fruit might be borderline between categories.")
 
-    # Instructions
-    with st.expander("How to use this app"):
-        st.markdown("""
-        1. **Select a model** from the sidebar (both models are identical)
-        2. **Upload an image** of a fruit using the file uploader
-        3. **Wait for the analysis** - the AI will process your image
-        4. **Review the results** including the predicted class and confidence scores
-        
-        **Tips for best results:**
-        - Use clear, well-lit images
-        - Ensure the fruit is the main subject
-        - Try different angles if results seem unclear
-        """)
+ 
 
-    # Model information
-    with st.expander("About the AI Model"):
-        st.markdown("""
-        **Architecture:** MobileNetV2 - A lightweight convolutional neural network optimized for mobile and edge devices.
-        
-        **Training:** The model was trained to classify fruits into three ripeness categories:
-        - **Ripe:** Ready to eat
-        - **Unripe:** Needs more time to ripen
-        - **Overripe:** Past peak ripeness
-        
-        **Technical Details:**
-        - Input: 128x128 RGB images
-        - Output: 3 class probabilities
-        - Framework: TensorFlow 2.x
-        """)
-
+    
 if __name__ == "__main__":
     main()
