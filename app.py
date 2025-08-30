@@ -98,7 +98,7 @@ FRUIT_CLASSES = [
 ]
 
 def main():
-    st.title("🍎 Ripeness Detection of Fruits")
+    st.title("Ripeness Detection of Fruits")
     st.write("Upload an image of a fruit to classify it using our deep learning model!")
     
     # Check if all required dependencies are available
