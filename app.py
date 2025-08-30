@@ -29,16 +29,16 @@ def preprocess_image(image, target_size=(128, 128)):
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Resize image to model input size
+        # resize image to model input size
         image = image.resize(target_size)
         
-        # Convert to numpy array
+        # convert to numpy array
         image_array = np.array(image)
         
-        # Normalize pixel values to [0, 1]
+        # normalize pixel values to [0, 1]
         image_array = image_array.astype(np.float32) / 255.0
         
-        # Add batch dimension
+        # add batch dimension
         image_array = np.expand_dims(image_array, axis=0)
         
         return image_array
