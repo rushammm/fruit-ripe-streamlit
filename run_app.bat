@@ -1,0 +1,3 @@
+@echo off
+echo Starting Streamlit Fruit Classification App...
+streamlit run app.py
