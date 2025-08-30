@@ -3,7 +3,7 @@ import streamlit as st
 # Set page config - MUST be the first Streamlit command
 st.set_page_config(
     page_title="Fruit Classification App",
-    page_icon="🍎",
+    page_icon="",
     layout="wide"
 )
 
